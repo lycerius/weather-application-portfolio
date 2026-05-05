@@ -19,22 +19,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.x
-      
-      - name: Restore dependencies
-        run: dotnet restore
+      - name: Build Docker image
+        run: docker build -t weather-api .
 
-      - name: Build
-        run: dotnet publish --no-restore
+      - name: Save Docker image
+        run: docker save weather-api > weather-api.tar
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: weather-api
-          path: bin/Release/net10.0/publish/
+          path: weather-api.tar
 
   build-pulumi:
     runs-on: ubuntu-latest
