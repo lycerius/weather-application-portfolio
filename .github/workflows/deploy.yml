@@ -1,0 +1,43 @@
+name: Deploy Pulumi
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::595266861432:role/GithubWorkerRole
+          aws-region: us-east-1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.x
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Pulumi Up
+        run: pulumi up --yes --stack Pulumi.dev
+        env:
+          PULUMI_BACKEND_URL: s3://pulimi-state-595266861432-us-east-1-an/weather-infra/

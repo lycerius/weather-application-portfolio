@@ -1,0 +1,14 @@
+bin/
+obj/
+*.user
+*.tmp
+*.log
+.vs/
+.vscode/
+.git/
+.gitignore
+README.md
+.dockerignore
+Dockerfile
+weather-api.http
+appsettings.Development.json

@@ -1,0 +1,15 @@
+{
+    "name": ".NET, React, Pulumi Dev Container",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-dotnettools.csharp",
+                "ms-vscode.vscode-typescript-next",
+                "pulumi.pulumi-lsp-client"
+            ]
+        }
+    }
+}
