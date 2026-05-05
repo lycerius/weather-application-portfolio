@@ -12,18 +12,27 @@ permissions:
 jobs:
   build-weather-app:
     runs-on: ubuntu-latest
+    workking-directory: weather-api
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+      
+      - name: Restore dependencies
+          run: dotnet restore
 
-      # Add your weather app build steps here
-      # e.g. npm install, npm run build, etc.
+      - name: Build
+          run: dotnet publish --no-restore
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: weather-app
-          path: <BUILD_OUTPUT_DIR>
+          name: weather-api
+          path: bin/Release/net10.0/publish/
 
   build-pulumi:
     runs-on: ubuntu-latest
@@ -37,19 +46,19 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.x
+          dotnet-version: 10.x
 
       - name: Restore dependencies
         run: dotnet restore
 
       - name: Build
-        run: dotnet build --no-restore
+        run: dotnet publish --no-restore
 
       - name: Upload Pulumi artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pulumi
-          path: infra/
+          path: bin/Release/net10.0/publish/
 
   deploy:
     runs-on: ubuntu-latest
