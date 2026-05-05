@@ -38,7 +38,7 @@ jobs:
         run: dotnet restore
 
       - name: Pulumi Plan
-        run: pulumi preview --yes
+        run: pulumi preview
         env:
           PULUMI_BACKEND_URL: s3://pulimi-state-595266861432-us-east-1-an/weather-infra/
 
