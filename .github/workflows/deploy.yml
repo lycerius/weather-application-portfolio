@@ -12,7 +12,9 @@ permissions:
 jobs:
   build-weather-app:
     runs-on: ubuntu-latest
-    workking-directory: weather-api
+    defaults:
+      run:
+        working-directory: weather-api
     steps:
       - name: Checkout
         uses: actions/checkout@v4
