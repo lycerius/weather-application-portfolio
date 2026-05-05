@@ -15,8 +15,8 @@ jobs:
     defaults:
       run:
         working-directory: infra
-      env:
-        PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+    env:
+      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
 
     steps:
       - name: Checkout
