@@ -45,17 +45,14 @@ jobs:
         with:
           dotnet-version: 10.x
 
-      - name: Restore dependencies
-        run: dotnet restore
-
       - name: Build
-        run: dotnet publish --no-restore
+        run: dotnet publish
 
       - name: Upload Pulumi artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pulumi
-          path: bin/Release/net10.0/
+          path: bin/Release/net10.0/publish/
 
   deploy:
     runs-on: ubuntu-latest
