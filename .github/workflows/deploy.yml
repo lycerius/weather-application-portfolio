@@ -48,6 +48,9 @@ jobs:
       - name: Build
         run: dotnet publish
 
+      - name: List bin files
+        run: ls -R bin/
+
       - name: Upload Pulumi artifacts
         uses: actions/upload-artifact@v4
         with:
