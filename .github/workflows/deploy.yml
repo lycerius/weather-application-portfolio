@@ -54,6 +54,9 @@ jobs:
       - name: Tar Pulumi artifacts
         run: tar -czvf pulumi-artifacts.tar.gz -C bin/Release/net10.0/ .
 
+      - name: List current directory
+        run: ls -la
+
       - name: Upload Pulumi Tar
         uses: actions/upload-artifact@v4
         with:
