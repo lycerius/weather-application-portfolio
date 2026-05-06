@@ -55,7 +55,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pulumi
-          path: bin/Release/net10.0/publish/
+          path: bin/Release/
 
   deploy:
     runs-on: ubuntu-latest
