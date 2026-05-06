@@ -51,11 +51,14 @@ jobs:
       - name: List bin files
         run: ls -R bin/
 
-      - name: Upload Pulumi artifacts
+      - name: Tar Pulumi artifacts
+        run: tar -czvf pulumi-artifacts.tar.gz -C bin/Release/net10.0/ .
+
+      - name: Upload Pulumi Tar
         uses: actions/upload-artifact@v4
         with:
           name: pulumi
-          path: bin/Release/net10.0/.
+          path: pulumi-artifacts.tar.gz
 
   deploy:
     runs-on: ubuntu-latest
