@@ -29,7 +29,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: weather-api
-          path: weather-api.tar
+          path: weather-api/weather-api.tar # Explicitly include folder
 
   build-pulumi:
     runs-on: ubuntu-latest
@@ -48,20 +48,15 @@ jobs:
       - name: Build
         run: dotnet publish
 
-      - name: List bin files
-        run: ls -R bin/
-
       - name: Tar Pulumi artifacts
+        # We tar the contents of net10.0 into a file inside the 'infra' folder
         run: tar -czvf pulumi-artifacts.tar.gz -C bin/Release/net10.0/ .
-
-      - name: List current directory
-        run: ls -la
 
       - name: Upload Pulumi Tar
         uses: actions/upload-artifact@v4
         with:
           name: pulumi
-          path: pulumi-artifacts.tar.gz
+          path: infra/pulumi-artifacts.tar.gz # Explicitly include folder
 
   deploy:
     runs-on: ubuntu-latest
@@ -72,10 +67,14 @@ jobs:
     env:
       PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
     steps:
+      - name: Checkout # Usually needed to get the Pulumi YAML files
+        uses: actions/checkout@v4
+
       - name: Download Pulumi artifacts
         uses: actions/download-artifact@v4
         with:
           name: pulumi
+          path: infra # Extracts files directly into the infra folder
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
