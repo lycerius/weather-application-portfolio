@@ -12,7 +12,50 @@ permissions:
   contents: read
 
 jobs:
+  build-pulumi:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Restore and publish Pulumi infra
+        run: dotnet publish -c Release -o ./bin/publish
+
+      - name: Upload Pulumi infra artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-publish
+          path: bin/publish
+
+  build-weather-api:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build weather-api Docker image
+        run: |
+          docker build -t weather-api:latest weather-api
+          docker save weather-api:latest -o weather-api.tar
+
+      - name: Upload weather-api Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weather-api-image
+          path: weather-api.tar
+
   deploy:
+    needs:
+      - build-pulumi
+      - build-weather-api
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -27,9 +70,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.x
-
-      - name: Build Pulumi project
-        run: dotnet publish
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
