@@ -7,7 +7,11 @@ using Pulumi.Awsx.Lb;
 
 return await Deployment.RunAsync(() => 
 {
-    var lb = new ApplicationLoadBalancer("nginx-lb");
+   
+});
+
+/*
+ var lb = new ApplicationLoadBalancer("nginx-lb");
     var cluster = new Cluster("nginx-cluster");
 
 
@@ -35,5 +39,5 @@ return await Deployment.RunAsync(() =>
             }
         }
     });
-});
+*/
 
