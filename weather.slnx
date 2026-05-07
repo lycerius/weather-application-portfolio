@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="infra/weather-api-infra.csproj" />
+  <Project Path="weather-api/weather-api.csproj" />
+</Solution>
