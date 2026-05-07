@@ -86,5 +86,8 @@ jobs:
       - name: Pulumi Stack Select
         run: pulumi stack select dev
 
+      - name: Pulumi Preview
+        run: pulumi preview --diff
+
       - name: Pulumi Up
-        run: pulumi up --yes --diff --show-replacement-steps
+        run: pulumi up --yes --show-replacement-steps
