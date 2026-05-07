@@ -6,9 +6,13 @@ using Pulumi.Awsx.Lb;
 
 return await Deployment.RunAsync(() => 
 {
+    var lb = new ApplicationLoadBalancer("nginx-lb");
+
+
     // Define the Fargate Service using the official nginx image
     var service = new FargateService("nginx-service", new FargateServiceArgs
     {
+        AssignPublicIp = true,
         TaskDefinitionArgs = new Pulumi.Awsx.Ecs.Inputs.FargateServiceTaskDefinitionArgs
         {
             Container = new Pulumi.Awsx.Ecs.Inputs.TaskDefinitionContainerDefinitionArgs
@@ -22,7 +26,7 @@ return await Deployment.RunAsync(() =>
                     new TaskDefinitionPortMappingArgs
                     {
                         ContainerPort = 80,
-                        TargetGroup = new ApplicationLoadBalancer("nginx-lb").DefaultTargetGroup
+                        TargetGroup = lb.DefaultTargetGroup
                     }
                 }
             }
