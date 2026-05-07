@@ -7,11 +7,7 @@ using Pulumi.Awsx.Lb;
 
 return await Deployment.RunAsync(() => 
 {
-   
-});
-
-/*
- var lb = new ApplicationLoadBalancer("nginx-lb");
+    var lb = new ApplicationLoadBalancer("nginx-lb");
     var cluster = new Cluster("nginx-cluster");
 
 
@@ -22,7 +18,7 @@ return await Deployment.RunAsync(() =>
         Cluster = cluster.Arn,
         TaskDefinitionArgs = new Pulumi.Awsx.Ecs.Inputs.FargateServiceTaskDefinitionArgs
         {
-            Container = new Pulumi.Awsx.Ecs.Inputs.TaskDefinitionContainerDefinitionArgs
+            Container = new TaskDefinitionContainerDefinitionArgs
             {
                 Name = "nginx",
                 Image = "nginx:latest", // Pulls directly from Docker Hub
@@ -39,5 +35,10 @@ return await Deployment.RunAsync(() =>
             }
         }
     });
-*/
+
+    return new Dictionary<string, object?>
+    {
+        ["url"] = lb.LoadBalancer.Apply(lb => lb.DnsName)
+    };
+});
 
