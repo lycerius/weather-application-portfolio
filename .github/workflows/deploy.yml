@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to run: deploy or destroy'
+        required: true
+        default: 'deploy'
 
 permissions:
   id-token: write
@@ -91,3 +96,40 @@ jobs:
 
       - name: Pulumi Up
         run: pulumi up --yes --show-replacement-steps
+
+  pulumi-destroy:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy' }}
+    needs:
+      - build-pulumi
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::595266861432:role/GithubWorkerRole
+          aws-region: us-east-1
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Pulumi Login
+        run: pulumi login s3://pulimi-state-595266861432-us-east-1-an/weather-infra/
+
+      - name: Pulumi Stack Select
+        run: pulumi stack select dev
+
+      - name: Pulumi Destroy (manual)
+        run: pulumi destroy --yes
