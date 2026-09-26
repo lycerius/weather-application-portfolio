@@ -56,6 +56,20 @@ jobs:
           role-to-assume: arn:aws:iam::595266861432:role/GithubWorkerRole
           aws-region: us-east-1
 
+      - name: Require 1.0.0 for first image
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          image_count=$(aws ecr describe-images \
+            --repository-name weather-api \
+            --query 'length(imageDetails[])' \
+            --output text)
+          if [[ "$image_count" == "0" && "$RELEASE_TAG" != "v1.0.0" ]]; then
+            echo "The first image must use Git tag v1.0.0; received $RELEASE_TAG." >&2
+            exit 1
+          fi
+
       - name: Login to Amazon ECR
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -63,10 +77,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Tags produced:
-      #   v1.2.3 git tag -> 1.2.3, 1.2, 1 (and latest)
-      #   push to main   -> main, sha-<short>, latest
-      #   pull request   -> pr-<number>, sha-<short> (built but not pushed)
       - name: Generate image tags and labels
         id: meta
         uses: docker/metadata-action@v5
@@ -74,19 +84,13 @@ jobs:
           images: ${{ steps.ecr.outputs.registry }}/weather-api
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push weather-api image
         id: build
         uses: docker/build-push-action@v6
         with:
           context: weather-api
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -95,11 +99,12 @@ jobs:
       # Deploy by digest so the running task always matches exactly what was built here
       - name: Output immutable image reference
         id: image
-        run: echo "image=${{ steps.ecr.outputs.registry }}/weather-api@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: echo "image=${{ steps.ecr.outputs.registry }}/weather-api:${GITHUB_REF_NAME#v}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
   deploy:
-    # Only deploy from main, release tags, or a manual "deploy" run; PRs just build
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'deploy') }}
+    # Deploy only version-tag refs; PRs and main pushes only build.
+    if: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'deploy')) && startsWith(github.ref, 'refs/tags/v') }}
     needs:
       - build-pulumi
       - build-weather-api
