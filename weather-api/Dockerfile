@@ -22,8 +22,8 @@ WORKDIR /app
 # Copy the published application from the build stage
 COPY --from=build /app/publish .
 
-# Expose the port the app runs on (default for ASP.NET Core is 80, but check launchSettings.json)
-EXPOSE 80
+# ASP.NET Core 8+ images listen on 8080 by default (ASPNETCORE_HTTP_PORTS)
+EXPOSE 8080
 
 # Set the entry point
 ENTRYPOINT ["dotnet", "weather-api.dll"]

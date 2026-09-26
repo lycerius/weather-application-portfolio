@@ -3,6 +3,7 @@ name: Deploy Weather Application
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -42,22 +43,69 @@ jobs:
 
   build-weather-api:
     runs-on: ubuntu-latest
+    if: ${{ !(github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy') }}
+    outputs:
+      image: ${{ steps.image.outputs.image }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build weather-api Docker image
-        run: |
-          docker build -t weather-api:latest weather-api
-          docker save weather-api:latest -o weather-api.tar
-
-      - name: Upload weather-api Docker image artifact
-        uses: actions/upload-artifact@v4
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          name: weather-api-image
-          path: weather-api.tar
+          role-to-assume: arn:aws:iam::595266861432:role/GithubWorkerRole
+          aws-region: us-east-1
+
+      # The repository lives outside the Pulumi stack so `pulumi destroy` never deletes pushed images
+      - name: Ensure ECR repository exists
+        run: |
+          aws ecr describe-repositories --repository-names weather-api >/dev/null 2>&1 \
+            || aws ecr create-repository --repository-name weather-api --image-scanning-configuration scanOnPush=true
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Tags produced:
+      #   v1.2.3 git tag -> 1.2.3, 1.2, 1 (and latest)
+      #   push to main   -> main, sha-<short>, latest
+      #   pull request   -> pr-<number>, sha-<short> (built but not pushed)
+      - name: Generate image tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.ecr.outputs.registry }}/weather-api
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push weather-api image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: weather-api
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Deploy by digest so the running task always matches exactly what was built here
+      - name: Output immutable image reference
+        id: image
+        run: echo "image=${{ steps.ecr.outputs.registry }}/weather-api@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
   deploy:
+    # Only deploy from main, release tags, or a manual "deploy" run; PRs just build
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'deploy') }}
     needs:
       - build-pulumi
       - build-weather-api
@@ -90,6 +138,9 @@ jobs:
 
       - name: Pulumi Stack Select
         run: pulumi stack select dev
+
+      - name: Set image to deploy
+        run: pulumi config set image "${{ needs.build-weather-api.outputs.image }}"
 
       - name: Pulumi Preview
         run: pulumi preview --diff

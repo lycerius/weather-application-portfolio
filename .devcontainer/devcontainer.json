@@ -8,7 +8,10 @@
             "extensions": [
                 "ms-dotnettools.csharp",
                 "ms-vscode.vscode-typescript-next",
-                "pulumi.pulumi-lsp-client"
+                "pulumi.pulumi-lsp-client",
+                "Anthropic.claude-code",
+                "github.vscode-github-actions",
+                "patcx.vscode-nuget-gallery"
             ]
         }
     }
