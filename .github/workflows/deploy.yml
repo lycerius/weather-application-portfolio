@@ -2,16 +2,16 @@ name: Deploy Weather Application
 
 on:
   push:
-    branches: [ main ]
-    tags: [ 'v*.*.*' ]
+    branches: [main]
+    tags: ["v*.*.*"]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
     inputs:
       action:
-        description: 'Action to run: deploy or destroy'
+        description: "Action to run: deploy or destroy"
         required: true
-        default: 'deploy'
+        default: "deploy"
 
 permissions:
   id-token: write
@@ -102,12 +102,43 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: echo "image=${{ steps.ecr.outputs.registry }}/weather-api:${GITHUB_REF_NAME#v}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
+  build-weather-web:
+    runs-on: ubuntu-latest
+    if: ${{ !(github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: weather-web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: weather-web
+        run: npm ci
+
+      - name: Build frontend for production
+        working-directory: weather-web
+        run: npm run build
+
+      - name: Upload frontend bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weather-web-dist
+          path: weather-web/dist
+
   deploy:
     # Deploy only version-tag refs; PRs and main pushes only build.
     if: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'deploy')) && startsWith(github.ref, 'refs/tags/v') }}
     needs:
       - build-pulumi
       - build-weather-api
+      - build-weather-web
+    outputs:
+      api_url: ${{ steps.api-url.outputs.api_url }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -143,6 +174,66 @@ jobs:
 
       - name: Pulumi Preview
         run: pulumi preview --diff
+
+      - name: Pulumi Up
+        run: pulumi up --yes --show-replacement-steps
+
+      - name: Capture API LB URL
+        id: api-url
+        run: echo "api_url=$(pulumi stack output url)" >> "$GITHUB_OUTPUT"
+
+  deploy-web:
+    if: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'deploy')) && startsWith(github.ref, 'refs/tags/v') }}
+    needs:
+      - deploy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra-web
+    env:
+      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+      VITE_API_URL: ${{ needs.deploy.outputs.api_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: weather-web/package-lock.json
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::595266861432:role/GithubWorkerRole
+          aws-region: us-east-1
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Pulumi Login
+        run: pulumi login s3://pulimi-state-595266861432-us-east-1-an/weather-web-infra/
+
+      - name: Pulumi Stack Select
+        run: pulumi stack select dev
+
+      - name: Build frontend with API URL
+        working-directory: weather-web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy frontend bundle to S3
+        run: |
+          BUCKET=$(pulumi stack output bucketName)
+          aws s3 sync ../weather-web/dist "s3://$BUCKET" --delete
 
       - name: Pulumi Up
         run: pulumi up --yes --show-replacement-steps

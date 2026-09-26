@@ -36,6 +36,24 @@
                 "${workspaceFolder}/weather-api/weather-api.csproj"
             ],
             "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "vite: dev",
+            "type": "shell",
+            "command": "npm run dev -- --host 0.0.0.0",
+            "options": {
+                "cwd": "${workspaceFolder}/weather-web"
+            },
+            "isBackground": true,
+            "problemMatcher": {
+                "owner": "vite",
+                "severity": "info",
+                "pattern": {
+                    "regexp": "^(.*)$",
+                    "file": 1,
+                    "message": 1
+                }
+            }
         }
     ]
 }
