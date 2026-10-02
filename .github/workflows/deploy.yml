@@ -18,6 +18,55 @@ permissions:
   contents: read
 
 jobs:
+  # Resolves the release tag for this run: the pushed tag, or a new patch tag for pushes to main.
+  # Tags pushed with GITHUB_TOKEN don't trigger another run, so the main-push run deploys itself.
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Checkout
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$EVENT_NAME" != "push" || "$GITHUB_REF" != "refs/heads/main" ]]; then
+            exit 0
+          fi
+
+          semver='^v[0-9]+\.[0-9]+\.[0-9]+$'
+
+          # Reuse a tag already on this commit so re-runs don't bump the version again
+          existing=$(git tag --points-at HEAD --sort=-v:refname | grep -E "$semver" | head -n1 || true)
+          if [[ -n "$existing" ]]; then
+            echo "tag=$existing" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          latest=$(git tag --list 'v*' --sort=-v:refname | grep -E "$semver" | head -n1 || true)
+          if [[ -z "$latest" ]]; then
+            next="v1.0.0"
+          else
+            IFS=. read -r major minor patch <<< "${latest#v}"
+            next="v${major}.${minor}.$((patch + 1))"
+          fi
+
+          git tag "$next"
+          git push origin "$next"
+          echo "tag=$next" >> "$GITHUB_OUTPUT"
+
   build-pulumi:
     runs-on: ubuntu-latest
     defaults:
@@ -44,6 +93,10 @@ jobs:
   build-weather-api:
     runs-on: ubuntu-latest
     if: ${{ !(github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy') }}
+    needs:
+      - version
+    env:
+      RELEASE_TAG: ${{ needs.version.outputs.tag }}
     outputs:
       image: ${{ steps.image.outputs.image }}
     steps:
@@ -57,9 +110,7 @@ jobs:
           aws-region: us-east-1
 
       - name: Require 1.0.0 for first image
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
+        if: ${{ needs.version.outputs.tag != '' }}
         run: |
           image_count=$(aws ecr describe-images \
             --repository-name weather-api \
@@ -83,14 +134,14 @@ jobs:
         with:
           images: ${{ steps.ecr.outputs.registry }}/weather-api
           tags: |
-            type=semver,pattern={{version}}
+            type=semver,pattern={{version}},value=${{ needs.version.outputs.tag }}
 
       - name: Build and push weather-api image
         id: build
         uses: docker/build-push-action@v6
         with:
           context: weather-api
-          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          push: ${{ needs.version.outputs.tag != '' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -99,8 +150,8 @@ jobs:
       # Deploy by digest so the running task always matches exactly what was built here
       - name: Output immutable image reference
         id: image
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-        run: echo "image=${{ steps.ecr.outputs.registry }}/weather-api:${GITHUB_REF_NAME#v}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+        if: ${{ needs.version.outputs.tag != '' }}
+        run: echo "image=${{ steps.ecr.outputs.registry }}/weather-api:${RELEASE_TAG#v}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
   build-web-pulumi:
     runs-on: ubuntu-latest
@@ -154,9 +205,10 @@ jobs:
           path: weather-web/dist
 
   deploy:
-    # Deploy only version-tag refs; PRs and main pushes only build.
-    if: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'deploy')) && startsWith(github.ref, 'refs/tags/v') }}
+    # Deploy only when a release tag was resolved (tag pushes and main pushes); PRs only build.
+    if: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'deploy')) && needs.version.outputs.tag != '' }}
     needs:
+      - version
       - build-pulumi
       - build-web-pulumi
       - build-weather-api
@@ -207,8 +259,9 @@ jobs:
         run: echo "api_url=$(pulumi stack output url)" >> "$GITHUB_OUTPUT"
 
   deploy-web:
-    if: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'deploy')) && startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'deploy')) && needs.version.outputs.tag != '' }}
     needs:
+      - version
       - deploy
     runs-on: ubuntu-latest
     defaults:
