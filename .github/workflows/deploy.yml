@@ -133,6 +133,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.ecr.outputs.registry }}/weather-api
+          # ECR tags are immutable; push only the version tag, never latest
+          flavor: |
+            latest=false
           tags: |
             type=semver,pattern={{version}},value=${{ needs.version.outputs.tag }}
 
@@ -315,10 +318,49 @@ jobs:
       - name: Pulumi Up
         run: pulumi up --yes --show-replacement-steps
 
-  pulumi-destroy:
+  pulumi-destroy-web:
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy' }}
     needs:
+      - build-web-pulumi
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra-web
+    env:
+      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::595266861432:role/GithubWorkerRole
+          aws-region: us-east-1
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Pulumi Login
+        run: pulumi login s3://pulimi-state-595266861432-us-east-1-an/weather-web-infra/
+
+      - name: Pulumi Stack Select
+        run: pulumi stack select dev
+
+      - name: Pulumi Destroy (manual)
+        run: pulumi destroy --yes
+
+  pulumi-destroy:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy' }}
+    # The web stack references the API stack's outputs, so tear it down first
+    needs:
       - build-pulumi
+      - pulumi-destroy-web
     runs-on: ubuntu-latest
     defaults:
       run:
