@@ -62,7 +62,8 @@ return await Deployment.RunAsync(() =>
 
     return new Dictionary<string, object?>
     {
-        ["url"] = lb.LoadBalancer.Apply(lb => $"http://{lb.DnsName}"),
+        // DnsName is itself an Output, so it must be unwrapped rather than interpolated inside Apply
+        ["url"] = Output.Format($"http://{lb.LoadBalancer.Apply(lb => lb.DnsName)}"),
         ["image"] = image,
     };
 });
