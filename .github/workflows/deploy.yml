@@ -298,11 +298,12 @@ jobs:
       - name: Install Pulumi CLI
         uses: pulumi/actions@v5
 
+      # Same backend as the API stack so the web stack's StackReference can resolve it
       - name: Pulumi Login
-        run: pulumi login s3://pulimi-state-595266861432-us-east-1-an/weather-web-infra/
+        run: pulumi login s3://pulimi-state-595266861432-us-east-1-an/weather-infra/
 
       - name: Pulumi Stack Select
-        run: pulumi stack select dev
+        run: pulumi stack select dev --create
 
       - name: Build frontend with API URL
         working-directory: weather-web
@@ -310,13 +311,14 @@ jobs:
           npm ci
           npm run build
 
+      # Create the bucket before syncing to it
+      - name: Pulumi Up
+        run: pulumi up --yes --show-replacement-steps
+
       - name: Deploy frontend bundle to S3
         run: |
           BUCKET=$(pulumi stack output bucketName)
           aws s3 sync ../weather-web/dist "s3://$BUCKET" --delete
-
-      - name: Pulumi Up
-        run: pulumi up --yes --show-replacement-steps
 
   pulumi-destroy-web:
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy' }}
@@ -347,7 +349,7 @@ jobs:
         uses: pulumi/actions@v5
 
       - name: Pulumi Login
-        run: pulumi login s3://pulimi-state-595266861432-us-east-1-an/weather-web-infra/
+        run: pulumi login s3://pulimi-state-595266861432-us-east-1-an/weather-infra/
 
       - name: Pulumi Stack Select
         run: pulumi stack select dev
