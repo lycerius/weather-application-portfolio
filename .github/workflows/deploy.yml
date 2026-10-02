@@ -102,6 +102,29 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: echo "image=${{ steps.ecr.outputs.registry }}/weather-api:${GITHUB_REF_NAME#v}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
+  build-web-pulumi:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra-web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Restore and publish web Pulumi infra
+        run: dotnet publish -c Release -o ./bin/publish
+
+      - name: Upload web Pulumi infra artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-infra-publish
+          path: bin/publish
+
   build-weather-web:
     runs-on: ubuntu-latest
     if: ${{ !(github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy') }}
@@ -135,6 +158,7 @@ jobs:
     if: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'deploy')) && startsWith(github.ref, 'refs/tags/v') }}
     needs:
       - build-pulumi
+      - build-web-pulumi
       - build-weather-api
       - build-weather-web
     outputs:
